@@ -1,0 +1,99 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    # softprops/action-gh-release@v2 (below) needs write access to create the
+    # Release and upload the MSI as an asset. Since GitHub's Feb 2023
+    # default-permissions change, GITHUB_TOKEN is read-only by default unless
+    # requested here - without this, the tag-triggered Release step would
+    # fail with a 403 ("Resource not accessible by integration") on a real
+    # tag push, while workflow_dispatch's artifact-only path (no Release
+    # step) would keep succeeding and mask the problem.
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Pinned, not a loose range: build-daemon-exe.ps1's sea-config uses
+          # "mainFormat": "module", which needs SEA's ESM-entry-point support
+          # (nodejs/node#61813, built on the StartExecutionCallbackWithModule
+          # embedder API from #61548) that only landed as of Node v25.7.0
+          # (2026-02-24) - Node 22.x predates it by ~2 years and either
+          # errors on the unrecognized config key or silently falls back to
+          # mainFormat: "commonjs", reproducing the import.meta
+          # SyntaxError Task 3 already fixed once. '26.7.0' is the exact
+          # version Task 3's live smoke test ran against on this machine.
+          node-version: '26.7.0'
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install WiX
+        run: dotnet tool install --global wix --version 5.0.2
+
+      - name: npm install (build-only deps)
+        run: npm ci
+
+      - name: Build the daemon exe
+        shell: pwsh
+        run: .\glazewm\build-daemon-exe.ps1
+
+      - name: Build wm-helpers.exe
+        shell: pwsh
+        run: |
+          dotnet publish glazewm\wm-helpers -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true
+
+      - name: Stage the MSI payload
+        shell: pwsh
+        run: .\installer\build-payload.ps1
+
+      - name: Build the MSI
+        shell: pwsh
+        # wix build resolves the .wxs file's relative Source="payload\..." paths
+        # against the process's current directory, not the .wxs file's own
+        # location (confirmed in Task 5: `wix build Product.wxs -o out\GlazeSnap.msi`
+        # only works run from inside installer/). So this step runs with
+        # installer/ as its working directory, and both the .wxs path and the
+        # -o output path are given relative to that directory.
+        #
+        # ProductVersion is derived from the pushed tag so ProductVersion
+        # actually changes release to release - a fixed version would leave
+        # MajorUpgrade's upgrade-detection unable to match (same UpgradeCode +
+        # ProductVersion, but a fresh auto-generated ProductCode each build),
+        # so the old product would never be removed. MSI's ProductVersion only
+        # accepts major.minor.build (three numeric parts), so any prerelease
+        # suffix (e.g. v1.0.0-rc1) is stripped rather than passed through.
+        working-directory: installer
+        run: |
+          $v = if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            ($env:GITHUB_REF -replace '^refs/tags/v', '') -replace '-.*$', ''
+          } else {
+            '0.0.0'
+          }
+          echo "MSI_VERSION=$v" >> $env:GITHUB_ENV
+          wix build Product.wxs -d ProductVersion=$v -o "out\GlazeSnap-$v.msi"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GlazeSnap-msi
+          path: installer\out\GlazeSnap-${{ env.MSI_VERSION }}.msi
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer\out\GlazeSnap-${{ env.MSI_VERSION }}.msi

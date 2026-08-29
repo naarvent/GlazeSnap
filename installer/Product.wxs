@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?ifndef ProductVersion?><?define ProductVersion="0.0.0"?><?endif?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="GlazeSnap"
+           Manufacturer="naarvent"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="5B6E9B1E-6C1B-4A9E-9F0D-3E9C2B7A4D11"
+           Scope="perUser">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of GlazeSnap is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="GlazeSnap">
+        <Component Id="PayloadScripts" Guid="4C1E9B2A-8F3D-4E6B-9A1C-2D5F7E8B0C34">
+          <File Id="InstallPs1" Source="payload\install.ps1" KeyPath="yes" />
+          <File Id="PersonalBlocksPs1" Source="payload\personal-blocks.ps1" />
+          <File Id="SyncPs1" Source="payload\sync.ps1" />
+        </Component>
+        <Directory Id="GlazewmDir" Name="glazewm">
+          <Component Id="GlazewmFiles" Guid="7A2D4E6F-1B3C-4D5E-8F9A-0B1C2D3E4F56">
+            <File Id="AutotilingExe" Source="payload\glazewm\autotiling.exe" KeyPath="yes" />
+            <File Id="AutotilingVbs" Source="payload\glazewm\autotiling.vbs" />
+            <File Id="GlazeMouseAhk" Source="payload\glazewm\glaze-mouse.ahk" />
+            <File Id="ConfigYaml" Source="payload\glazewm\config.yaml" />
+            <File Id="WmHelpersExe" Source="payload\glazewm\wm-helpers.exe" />
+          </Component>
+        </Directory>
+        <Directory Id="AltsnapDir" Name="altsnap">
+          <Component Id="AltsnapFiles" Guid="9C3E5F70-2D4A-4B6C-8E9F-1A2B3C4D5E67">
+            <File Id="AltSnapIni" Source="payload\altsnap\AltSnap.ini" KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="GlazeSnap" Level="1">
+      <ComponentRef Id="PayloadScripts" />
+      <ComponentRef Id="GlazewmFiles" />
+      <ComponentRef Id="AltsnapFiles" />
+    </Feature>
+
+    <!--
+      Reuses install.ps1 instead of re-implementing the PERSONAL-region merge
+      as a custom action. Runs per-user (no elevation, Impersonate="yes").
+
+      Deviation from the brief's starting draft: the brief's ExeCommand built
+      the path with PowerShell's own `$env:LOCALAPPDATA` inside a single
+      quoted -Command string. PowerShell does not interpolate variables
+      inside single quotes, so that string is passed to the ampersand call
+      operator completely literally, confirmed by running it directly, which
+      fails with: the term '$env:LOCALAPPDATA\GlazeSnap\install.ps1' is not
+      recognized. Using MSI's own formatted string property [INSTALLFOLDER]
+      instead (the same directory these files were just installed to, under
+      StandardDirectory LocalAppDataFolder) sidesteps PowerShell quoting
+      entirely: WiX/MSI resolves it to the real per-user path before the
+      deferred action's command line is baked into the execution script, so
+      no CustomActionData indirection is needed for this simple case.
+    -->
+    <CustomAction Id="RunInstallScript"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]install.ps1&quot;"
+                  Execute="deferred"
+                  Impersonate="yes"
+                  Return="check" />
+
+    <InstallExecuteSequence>
+      <Custom Action="RunInstallScript" After="InstallFiles" Condition="NOT REMOVE" />
+    </InstallExecuteSequence>
+  </Package>
+</Wix>

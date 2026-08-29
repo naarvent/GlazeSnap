@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- net10.0 porque es el unico runtime instalado en la maquina: el
+         net8.0 original compilaba pero al ejecutarlo fallaba por falta de
+         Microsoft.NETCore.App 8. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>wm-helpers</AssemblyName>
+    <RootNamespace>WmHelpers</RootNamespace>
+    <StartupObject>WmHelpersEntry</StartupObject>
+  </PropertyGroup>
+</Project>

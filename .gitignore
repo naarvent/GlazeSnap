@@ -1,0 +1,33 @@
+# Backups install.ps1 leaves behind
+*.bak
+
+# Runtime logs
+*.log
+
+# Written by the daemon at startup with the port it settled on
+bridge-port
+
+# Build output of the C# helper. install.ps1 rebuilds it; the binary is not
+# versioned so nobody has to trust a committed executable.
+bin/
+obj/
+*.exe
+
+# SEA build intermediates for the daemon exe
+glazewm/dist/
+
+# Windows junk
+Thumbs.db
+desktop.ini
+
+# npm packages used only to build the daemon exe (postject)
+node_modules/
+
+# MSI build output (installer/build-payload.ps1, wix build)
+installer/payload/
+installer/out/
+
+# AI-assisted development process - never part of the shipped project
+.claude/
+docs/superpowers/
+CLAUDE.md

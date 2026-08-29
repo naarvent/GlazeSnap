@@ -1,0 +1,337 @@
+general:
+  startup_commands:
+    # autotiling.vbs starts autotiling.mjs hidden (wscript, no console window).
+    # That daemon talks to GlazeWM over IPC (ws://127.0.0.1:6123) and sets the
+    # tiling direction from the shape of the focused window, which emulates the
+    # BSP layout GlazeWM does not ship (upstream issue #678).
+    - 'shell-exec wscript C:\Users\USERNAME\.glzr\glazewm\autotiling.vbs'
+    # glaze-mouse.ahk: Win+drag to move and resize, tiled windows included.
+    # It reaches the daemon through the HTTP bridge on port 6124.
+    #
+    # The 8.3 short path (PROGRA~1) is deliberate: GlazeWM's shell-exec parser
+    # does not accept quoted paths followed by arguments.
+    - 'shell-exec C:\PROGRA~1\AutoHotkey\v2\AutoHotkey64.exe C:\Users\USERNAME\.glzr\glazewm\glaze-mouse.ahk'
+    # >>>>>> PERSONAL: startup >>>>>>
+    # Anything else you want started with the window manager: a status bar, a
+    # wallpaper engine, a tray app.
+    #
+    # - 'shell-exec C:\PROGRA~1\YASB\yasbc.exe start'
+    # <<<<<< PERSONAL <<<<<<
+
+  # >>>>>> PERSONAL: shutdown >>>>>>
+  shutdown_commands: []
+  # <<<<<< PERSONAL <<<<<<
+
+  # Focus still follows the cursor, X11 style — but glaze-mouse.ahk does it,
+  # not GlazeWM, so the built-in one is off. Having both on focuses every hover
+  # twice.
+  #
+  # What the script adds is a short delay before a hovered window takes focus.
+  # Without one, crossing a window on the way to another focuses it in passing:
+  # the border flashes and the autotiling daemon sets the split axis from the
+  # shape of a window you never meant to touch. It also knows to keep its hands
+  # off during a drag, while a menu is open and while a modal dialog is up.
+  #
+  # The side effect is the same and still the point: a new window is born on
+  # whatever workspace and monitor the mouse is sitting on, because the script
+  # focuses the workspace under the pointer when there is no window there.
+  #
+  # Set this back to true if you do not run AutoHotkey, and turn
+  # FOCUS_FOLLOWS_MOUSE off at the top of glaze-mouse.ahk. See docs/MOUSE.md.
+  focus_follows_cursor: false
+  toggle_workspace_on_refocus: false
+
+  # Off on purpose. Warping the cursor across monitors fights with hover focus,
+  # whichever of the two is providing it: the jump lands the pointer on some
+  # other window, which immediately steals the focus back.
+  cursor_jump:
+    enabled: false
+    trigger: 'monitor_focus'
+
+gaps:
+  scale_with_dpi: true
+
+  # Same value as the side outer_gap, so the space between two windows and the
+  # space between a window and the screen edge look identical.
+  inner_gap: '6px'
+
+  # Top is 0 because a status bar registered as a Windows app bar already
+  # reserves its strip of the work area, and GlazeWM tiles inside what is left.
+  # If your bar does not reserve work area (Zebar does not), put its height
+  # here instead.
+  outer_gap:
+    top: '0px'
+    right: '6px'
+    bottom: '6px'
+    left: '6px'
+
+window_effects:
+  focused_window:
+    # Colored border around the focused window. Windows 11 only.
+    border:
+      enabled: true
+      color: '#8dbcff'
+
+    # Removing the title bar breaks rendering in some applications.
+    hide_title_bar:
+      enabled: false
+
+    # Windows 11 only. 'square', 'rounded' or 'small_rounded'.
+    corner_style:
+      enabled: false
+      style: 'square'
+
+    # '0' is fully transparent, and therefore unfocusable.
+    transparency:
+      enabled: false
+      opacity: '95%'
+
+  other_windows:
+    border:
+      enabled: true
+      color: '#a1a1a1'
+    hide_title_bar:
+      enabled: false
+    corner_style:
+      enabled: false
+      style: 'square'
+    transparency:
+      enabled: false
+      opacity: '0%'
+
+window_behavior:
+  # 'tiling' or 'floating'.
+  initial_state: 'tiling'
+
+  # Also the defaults for the state commands (set-floating and friends) when
+  # called without flags.
+  state_defaults:
+    floating:
+      centered: true
+      shown_on_top: false
+
+    fullscreen:
+      # Maximize when the window has a maximize button, true fullscreen if not.
+      maximized: false
+      shown_on_top: false
+
+workspaces:
+  - name: '1'
+  - name: '2'
+  - name: '3'
+  - name: '4'
+  - name: '5'
+  - name: '6'
+  - name: '7'
+  - name: '8'
+  - name: '9'
+  - name: '10'
+
+window_rules:
+  - commands: ['ignore']
+    match:
+      # Ignore Zebar windows.
+      - window_process: { equals: 'zebar' }
+
+      # Ignore picture-in-picture windows.
+      - window_title: { regex: '[Pp]icture.in.[Pp]icture' }
+        window_class: { regex: 'Chrome_WidgetWin_1|MozillaDialogClass' }
+
+      # Third-party applications that misbehave when tiled.
+      - window_process: { equals: 'PowerToys' }
+        window_class: { regex: 'HwndWrapper\[PowerToys\.PowerAccent.*?\]' }
+      - window_title: { equals: 'Command Palette' }
+        window_class: { equals: 'WinUIDesktopWin32WindowClass' }
+      - window_process: { equals: 'PowerToys' }
+        window_title: { regex: '.*? - Peek' }
+      - window_process: { equals: 'Lively' }
+        window_class: { regex: 'HwndWrapper' }
+      - window_process: { equals: 'EXCEL' }
+        window_class: { not_regex: 'XLMAIN' }
+      - window_process: { equals: 'WINWORD' }
+        window_class: { not_regex: 'OpusApp' }
+      - window_process: { equals: 'POWERPNT' }
+        window_class: { not_regex: 'PPTFrameClass' }
+
+  # Dialogs float instead of being tiled. Rearranging the whole layout around a
+  # "Save as" box, and again when it closes, is the most disruptive thing a
+  # tiling WM does to an ordinary Windows desktop.
+  #
+  # This is the static half of it, and it is here rather than only in the daemon
+  # so that the cases which can be named up front never show the brief flash of
+  # a dialog being tiled first. `#32770` is the class Windows itself registers
+  # for every dialog box, so Save As, Print, Properties and most "are you sure?"
+  # boxes all report it.
+  #
+  # It comes after the ignore rules on purpose: a window nobody manages does not
+  # need floating.
+  #
+  # The daemon catches everything else at runtime, by reading the window's Win32
+  # style and its owner — neither of which a window rule can match on. See
+  # docs/POPUPS.md, including what to do when something floats that should not.
+  - commands: ['set-floating --centered=true --shown-on-top=true']
+    match:
+      - window_class: { equals: '#32770' }
+      - window_class: { equals: 'Credential Dialog Xaml Host' }
+      - window_class: { equals: 'MozillaDialogClass' }
+
+binding_modes:
+  # Resize the focused window with the arrow keys or HJKL, no modifier held.
+  # This is the GlazeWM equivalent of a Hyprland submap.
+  - name: 'resize'
+    keybindings:
+      - commands: ['resize --width -2%']
+        bindings: ['h', 'left']
+      - commands: ['resize --width +2%']
+        bindings: ['l', 'right']
+      - commands: ['resize --height +2%']
+        bindings: ['k', 'up']
+      - commands: ['resize --height -2%']
+        bindings: ['j', 'down']
+      # Always leave yourself a way out of a binding mode.
+      - commands: ['wm-disable-binding-mode --name resize']
+        bindings: ['escape', 'enter']
+
+keybindings:
+  # The modifier is Alt everywhere, not Win. Three reasons, all learned the
+  # hard way, all written up in docs/KEYBINDINGS.md:
+  #   1. Windows reserves Win+<number> for the taskbar.
+  #   2. Remote desktop clients often swallow the Win key entirely.
+  #   3. Binding Win+S eats the plain `s` key, because it collides with
+  #      Windows Search.
+  #
+  # The cost of Alt: it shadows the classic application menus (Alt+F for File,
+  # Alt+E for Edit) and Alt+Enter, which some games use for fullscreen. Change
+  # any single binding that gets in your way.
+
+  # Quit the window manager / reload the config.
+  - commands: ['wm-exit']
+    bindings: ['alt+shift+ctrl+escape']
+  - commands: ['wm-reload-config']
+    bindings: ['alt+shift+r']
+
+  # Close the focused window. Hyprland: killactive.
+  - commands: ['close']
+    bindings: ['alt+q']
+
+  # Float / unfloat. Hyprland: togglefloating.
+  - commands: ['toggle-floating']
+    bindings: ['alt+f']
+
+  # Put a window back in the middle of the workspace. For the floating window
+  # that opened half off the screen, or ended up behind something: the daemon
+  # does this to popups it recognises, and this is the same thing by hand.
+  #
+  # Two commands, and it has to be two. `set-floating` returns immediately when
+  # the window is already in the state asked for, which is precisely the case
+  # here — and its own --centered is ignored anyway once the window has been
+  # moved by hand, which is how it got lost in the first place. `position
+  # --centered` carries neither condition.
+  - commands: ['set-floating --shown-on-top=true', 'position --centered']
+    bindings: ['alt+shift+f']
+
+  # File manager.
+  - commands: ['shell-exec explorer']
+    bindings: ['alt+e']
+
+  # Terminal. Alt+Enter is the i3/dwm/Hyprland convention, Alt+S is here
+  # because it is easier to reach. Both work.
+  - commands: ['shell-exec wt']
+    bindings: ['alt+s', 'alt+enter']
+
+  # Flip the split axis for the next window. Hyprland: togglesplit.
+  # The autotiling daemon does this automatically; this is the manual override.
+  - commands: ['toggle-tiling-direction']
+    bindings: ['alt+j']
+
+  # Enter resize mode, defined above under binding_modes.
+  - commands: ['wm-enable-binding-mode --name resize']
+    bindings: ['alt+r']
+
+  # Move the focus. Hyprland: movefocus.
+  - commands: ['focus --direction left']
+    bindings: ['alt+left']
+  - commands: ['focus --direction right']
+    bindings: ['alt+right']
+  - commands: ['focus --direction up']
+    bindings: ['alt+up']
+  - commands: ['focus --direction down']
+    bindings: ['alt+down']
+
+  # Move the window inside the layout. Hyprland: movewindow.
+  - commands: ['move --direction left']
+    bindings: ['alt+shift+left']
+  - commands: ['move --direction right']
+    bindings: ['alt+shift+right']
+  - commands: ['move --direction up']
+    bindings: ['alt+shift+up']
+  - commands: ['move --direction down']
+    bindings: ['alt+shift+down']
+
+  # Jump to a workspace.
+  - commands: ['focus --workspace 1']
+    bindings: ['alt+1']
+  - commands: ['focus --workspace 2']
+    bindings: ['alt+2']
+  - commands: ['focus --workspace 3']
+    bindings: ['alt+3']
+  - commands: ['focus --workspace 4']
+    bindings: ['alt+4']
+  - commands: ['focus --workspace 5']
+    bindings: ['alt+5']
+  - commands: ['focus --workspace 6']
+    bindings: ['alt+6']
+  - commands: ['focus --workspace 7']
+    bindings: ['alt+7']
+  - commands: ['focus --workspace 8']
+    bindings: ['alt+8']
+  - commands: ['focus --workspace 9']
+    bindings: ['alt+9']
+  - commands: ['focus --workspace 10']
+    bindings: ['alt+0']
+
+  # Send the window to a workspace and follow it there.
+  # The trailing `focus` is deliberate: GlazeWM only sends the window and
+  # leaves you behind, komorebi takes you along. Drop it for stock behaviour.
+  - commands: ['move --workspace 1', 'focus --workspace 1']
+    bindings: ['alt+shift+1']
+  - commands: ['move --workspace 2', 'focus --workspace 2']
+    bindings: ['alt+shift+2']
+  - commands: ['move --workspace 3', 'focus --workspace 3']
+    bindings: ['alt+shift+3']
+  - commands: ['move --workspace 4', 'focus --workspace 4']
+    bindings: ['alt+shift+4']
+  - commands: ['move --workspace 5', 'focus --workspace 5']
+    bindings: ['alt+shift+5']
+  - commands: ['move --workspace 6', 'focus --workspace 6']
+    bindings: ['alt+shift+6']
+  - commands: ['move --workspace 7', 'focus --workspace 7']
+    bindings: ['alt+shift+7']
+  - commands: ['move --workspace 8', 'focus --workspace 8']
+    bindings: ['alt+shift+8']
+  - commands: ['move --workspace 9', 'focus --workspace 9']
+    bindings: ['alt+shift+9']
+  - commands: ['move --workspace 10', 'focus --workspace 10']
+    bindings: ['alt+shift+0']
+
+  # Stands in for Hyprland's `mouse_down`/`mouse_up` workspace cycling:
+  # GlazeWM cannot bind the scroll wheel.
+  - commands: ['focus --next-active-workspace']
+    bindings: ['alt+bracketright']
+  - commands: ['focus --prev-active-workspace']
+    bindings: ['alt+bracketleft']
+
+  # >>>>>> PERSONAL: keybindings >>>>>>
+  # Your own bindings go here: launch a browser, an editor, a script. The
+  # examples below are commented out; drop the # and fix the path.
+  #
+  # Neither sync.ps1 nor install.ps1 will overwrite this region once it has
+  # anything real in it. Full guide, including the list of commands and the
+  # key combinations Windows reserves for itself, in docs/CUSTOMIZING.md.
+
+  # - commands: ['shell-exec C:\PROGRA~1\MOZILL~1\firefox.exe']
+  #   bindings: ['alt+b']
+
+  # - commands: ['shell-exec code']
+  #   bindings: ['alt+c']
+  # <<<<<< PERSONAL <<<<<<

@@ -1,0 +1,8 @@
+{
+  "name": "glazesnap-build",
+  "private": true,
+  "description": "Build-only tooling for packaging the daemon as a standalone exe. Not a runtime dependency of autotiling.mjs — the daemon itself has none.",
+  "devDependencies": {
+    "postject": "^1.0.0-alpha.6"
+  }
+}
