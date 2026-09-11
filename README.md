@@ -71,6 +71,7 @@ itself.
 winget install glzr-io.glazewm
 winget install AutoHotkey.AutoHotkey        # v2, not v1
 winget install Microsoft.DotNet.Runtime.10  # optional, for the taskbar fix
+winget install AltSnap.AltSnap              # optional, for Alt+drag on floating windows
 ```
 
 Then run the downloaded `.msi`, and start GlazeWM.
@@ -84,6 +85,7 @@ winget install glzr-io.glazewm
 winget install OpenJS.NodeJS            # Node 22 or newer
 winget install AutoHotkey.AutoHotkey    # v2, not v1
 winget install Microsoft.DotNet.SDK.10  # optional, for the taskbar fix
+winget install AltSnap.AltSnap          # optional, for Alt+drag on floating windows
 
 git clone https://github.com/naarvent/glazesnap.git $env:USERPROFILE\glazesnap
 cd $env:USERPROFILE\glazesnap

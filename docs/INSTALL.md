@@ -18,9 +18,16 @@ winget install glzr-io.glazewm
 winget install OpenJS.NodeJS
 winget install AutoHotkey.AutoHotkey
 winget install Microsoft.DotNet.SDK.10
+winget install AltSnap.AltSnap
 ```
 
-AltSnap is not on winget; grab it from its releases page.
+`winget install AltSnap.AltSnap` installs per-user (`--scope user`), no admin
+rights needed. `install.ps1` copies `altsnap/AltSnap.ini` to
+`%APPDATA%\AltSnap\AltSnap.ini` on its own — that's the "Where things end up"
+table below — but it does not install `AltSnap.exe` itself, so without the
+`winget install` above the config sits there with nothing to read it and
+`Alt`+drag falls through to whatever the focused app does with a held `Alt`
+(usually text/icon selection, not a window move).
 
 Missing pieces are not fatal. `install.ps1` warns and carries on, and each part
 degrades on its own: no AutoHotkey means no mouse gestures, no .NET means no
