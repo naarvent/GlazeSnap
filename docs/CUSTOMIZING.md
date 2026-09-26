@@ -12,7 +12,7 @@ between "the setup" and "your stuff" is marked inside the file itself:
 
 ```yaml
   # >>>>>> PERSONAL: keybindings >>>>>>
-  - commands: ['shell-exec C:\PROGRA~1\MOZILL~1\firefox.exe']
+  - commands: ['shell-exec %ProgramFiles%\Mozilla Firefox\firefox.exe']
     bindings: ['alt+b']
   # <<<<<< PERSONAL <<<<<<
 ```
@@ -51,7 +51,7 @@ float whatever is focused there:
 
 ```yaml
   # >>>>>> PERSONAL: keybindings >>>>>>
-  - commands: ['shell-exec C:\PROGRA~1\MOZILL~1\firefox.exe']
+  - commands: ['shell-exec %ProgramFiles%\Mozilla Firefox\firefox.exe']
     bindings: ['alt+b']
 
   - commands: ['shell-exec code']
@@ -68,17 +68,23 @@ applied at all**, so one typo silently reverts every change in the file.
 
 ### Paths with spaces
 
-`shell-exec` does not accept paths containing spaces, quoted or not. Use the 8.3
-short path:
+The program path may contain spaces, **unquoted**:
+`shell-exec %ProgramFiles%\Mozilla Firefox\firefox.exe` works, because GlazeWM
+tries longer and longer prefixes of the command until one is an existing file.
+`%VARIABLES%` are expanded, so no path needs your user name or drive in it.
 
-```cmd
-for %I in ("C:\Program Files\Mozilla Firefox\firefox.exe") do @echo %~sI
-```
+Two things do not work:
 
-which prints something like `C:\PROGRA~1\MOZILL~1\firefox.exe`. That is what
-goes in `commands`.
+- **Quotes.** GlazeWM's parser takes the third `"` as the closing one, so
+  `"C:\Program Files\app.exe" --flag` fails.
+- **Arguments with spaces.** Arguments are split on whitespace, so
+  `shell-exec wscript %USERPROFILE%\script.vbs` breaks for a user named
+  `Ana Lopez`. Launch the file itself instead (`shell-exec
+  %USERPROFILE%\script.vbs`) and let its file association pick the program.
+  If you really need one, get the 8.3 short path with
+  `for %I in ("C:\Some Path\file") do @echo %~sI`.
 
-Anything on your `PATH` sidesteps the problem entirely: `shell-exec code`,
+Anything on your `PATH` sidesteps all of it: `shell-exec code`,
 `shell-exec wt`, `shell-exec explorer`.
 
 ### Key names
@@ -119,11 +125,11 @@ own inside the region:
 
 ```yaml
     # >>>>>> PERSONAL: startup >>>>>>
-    - 'shell-exec C:\PROGRA~1\YASB\yasbc.exe start'
+    - 'shell-exec %ProgramFiles%\YASB\yasbc.exe start'
     # <<<<<< PERSONAL <<<<<<
 ```
 
-Same 8.3 path rule applies.
+Same [path rules](#paths-with-spaces) apply.
 
 ## Gaps, borders, rules
 

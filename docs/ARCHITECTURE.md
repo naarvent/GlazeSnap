@@ -133,19 +133,27 @@ GlazeWM starts both scripts itself, from `startup_commands`:
 
 ```yaml
 startup_commands:
-  - 'shell-exec wscript C:\Users\USERNAME\.glzr\glazewm\autotiling.vbs'
-  - 'shell-exec C:\Users\USERNAME\AppData\Local\Programs\AutoHotkey\v2\AutoHotkey64.exe C:\Users\USERNAME\.glzr\glazewm\glaze-mouse.ahk'
+  - 'shell-exec %USERPROFILE%\.glzr\glazewm\autotiling.vbs'
+  - 'shell-exec %USERPROFILE%\.glzr\glazewm\glaze-mouse.ahk'
 ```
 
 The `.vbs` exists only to launch the daemon **without a console window**
 (`WScript.Shell.Run` with its second argument at `0`).
 
-> **Paths with spaces**
-> GlazeWM's `shell-exec` parser does not accept them, quoted or otherwise. Hence
-> the 8.3 short paths such as `C:\PROGRA~1\...`. To get one:
-> ```cmd
-> for %I in ("C:\Program Files\Some App\app.exe") do @echo %~sI
-> ```
+Neither line names an interpreter. `shell-exec` hands the path to
+`ShellExecuteExW`, which opens it like a double click: the `.vbs` goes to
+wscript and the `.ahk` to whatever AutoHotkey v2 is installed, per-machine or
+per-user. No install path is baked into the config.
+
+> **How `shell-exec` parses a command** (GlazeWM 3.10)
+> - `%VARIABLES%` are expanded first.
+> - The program path may contain spaces, unquoted: it tries longer and longer
+>   prefixes of the command until one is an existing file.
+> - Arguments are split on whitespace and re-joined with single spaces, so an
+>   argument containing a space arrives as two. That is why the scripts above
+>   are the program and not an argument to `wscript` or `AutoHotkey64.exe`.
+> - Quoting the program (`"C:\...\app.exe" args`) is broken: the parser takes
+>   the *third* `"` as the closing one. Avoid quotes.
 
 ## Event handling
 

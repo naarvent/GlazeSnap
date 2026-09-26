@@ -95,9 +95,9 @@ cd $env:USERPROFILE\glazesnap
 
 Editing the source and want changes to apply without reinstalling? Use
 `.\install.ps1 -Link` instead — it symlinks the installed files back into
-this clone. That mode requires Developer Mode or an elevated shell, and it
-skips the config-path rewrite (only a `Write-Warning`), so you'll need to
-replace the `USERNAME` placeholder in `config.yaml` by hand.
+this clone. That mode requires Developer Mode or an elevated shell. It skips
+the config-path rewrite, which only matters for absolute paths you add
+yourself: the shipped config uses `%USERPROFILE%`.
 
 Then start GlazeWM. AltSnap is optional and installed separately; see
 [docs/INSTALL.md](docs/INSTALL.md) for the details, including what to do when

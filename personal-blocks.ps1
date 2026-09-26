@@ -30,7 +30,7 @@ $PERSONAL_TEMPLATES = [ordered]@{
     # Anything else you want started with the window manager: a status bar, a
     # wallpaper engine, a tray app.
     #
-    # - 'shell-exec C:\PROGRA~1\YASB\yasbc.exe start'
+    # - 'shell-exec %ProgramFiles%\YASB\yasbc.exe start'
 '@
 
     shutdown    = @'
@@ -45,7 +45,7 @@ $PERSONAL_TEMPLATES = [ordered]@{
   # anything real in it. Full guide, including the list of commands and the
   # key combinations Windows reserves for itself, in docs/CUSTOMIZING.md.
 
-  # - commands: ['shell-exec C:\PROGRA~1\MOZILL~1\firefox.exe']
+  # - commands: ['shell-exec %ProgramFiles%\Mozilla Firefox\firefox.exe']
   #   bindings: ['alt+b']
 
   # - commands: ['shell-exec code']

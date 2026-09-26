@@ -52,9 +52,9 @@ cd $env:USERPROFILE\glazesnap
 What the script does:
 
 1. Copies the files into place, backing up anything it overwrites as `.bak`.
-2. Rewrites the absolute paths in `config.yaml` to your user. GlazeWM does not
-   expand environment variables inside its config, so `%USERPROFILE%` is not an
-   option — the paths have to be substituted for real.
+2. Rewrites any `C:\Users\<someone>\` path in `config.yaml` to your user. The
+   shipped config does not need it (it uses `%USERPROFILE%`, which GlazeWM
+   expands), but paths you put in your PERSONAL regions on another machine do.
 3. Builds `wm-helpers.exe` from source and drops the build output afterwards.
 
 Then start GlazeWM, or press `Alt+Shift+R` if it is already running.

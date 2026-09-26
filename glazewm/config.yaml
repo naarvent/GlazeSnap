@@ -4,18 +4,23 @@ general:
     # That daemon talks to GlazeWM over IPC (ws://127.0.0.1:6123) and sets the
     # tiling direction from the shape of the focused window, which emulates the
     # BSP layout GlazeWM does not ship (upstream issue #678).
-    - 'shell-exec wscript C:\Users\USERNAME\.glzr\glazewm\autotiling.vbs'
+    #
+    # Both scripts are launched by path alone, no interpreter in front: shell-exec
+    # opens them like a double click, so the .vbs goes to wscript and the .ahk to
+    # whichever AutoHotkey v2 is installed, per-machine or per-user. Naming the
+    # interpreter would mean passing the script as an argument, and shell-exec
+    # splits arguments on spaces, so a user name with a space in it would break.
+    # The program path itself may contain spaces. %USERPROFILE% is expanded by
+    # GlazeWM.
+    - 'shell-exec %USERPROFILE%\.glzr\glazewm\autotiling.vbs'
     # glaze-mouse.ahk: Win+drag to move and resize, tiled windows included.
     # It reaches the daemon through the HTTP bridge on port 6124.
-    #
-    # The 8.3 short path (PROGRA~1) is deliberate: GlazeWM's shell-exec parser
-    # does not accept quoted paths followed by arguments.
-    - 'shell-exec C:\PROGRA~1\AutoHotkey\v2\AutoHotkey64.exe C:\Users\USERNAME\.glzr\glazewm\glaze-mouse.ahk'
+    - 'shell-exec %USERPROFILE%\.glzr\glazewm\glaze-mouse.ahk'
     # >>>>>> PERSONAL: startup >>>>>>
     # Anything else you want started with the window manager: a status bar, a
     # wallpaper engine, a tray app.
     #
-    # - 'shell-exec C:\PROGRA~1\YASB\yasbc.exe start'
+    # - 'shell-exec %ProgramFiles%\YASB\yasbc.exe start'
     # <<<<<< PERSONAL <<<<<<
 
   # >>>>>> PERSONAL: shutdown >>>>>>
@@ -329,7 +334,7 @@ keybindings:
   # anything real in it. Full guide, including the list of commands and the
   # key combinations Windows reserves for itself, in docs/CUSTOMIZING.md.
 
-  # - commands: ['shell-exec C:\PROGRA~1\MOZILL~1\firefox.exe']
+  # - commands: ['shell-exec %ProgramFiles%\Mozilla Firefox\firefox.exe']
   #   bindings: ['alt+b']
 
   # - commands: ['shell-exec code']

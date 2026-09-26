@@ -52,10 +52,17 @@ function Test-Requirements {
     if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
         $missing += 'Node.js 22+           winget install OpenJS.NodeJS'
     }
-    if (-not (Test-Path 'C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe')) {
+    # config.yaml starts glaze-mouse.ahk and autotiling.vbs by file association,
+    # so what matters is that .ahk opens with AutoHotkey, wherever it lives
+    # (Program Files, or %LOCALAPPDATA%\Programs for a per-user install).
+    if (-not (Test-Path 'Registry::HKEY_CLASSES_ROOT\.ahk')) {
         $missing += 'AutoHotkey v2         winget install AutoHotkey.AutoHotkey'
     }
-    if (-not (Test-Path 'C:\Program Files\glzr.io\GlazeWM\glazewm.exe')) {
+    $vbsOpen = (Get-ItemProperty 'Registry::HKEY_CLASSES_ROOT\VBSFile\Shell\Open\Command' -ErrorAction SilentlyContinue).'(default)'
+    if ($vbsOpen -notmatch 'wscript') {
+        Write-Warning '.vbs files do not open with wscript here (some hardening tools reassign them), so the autotiling daemon will not start. Restore the association or change the autotiling line in config.yaml.'
+    }
+    if (-not (Test-Path "$env:ProgramFiles\glzr.io\GlazeWM\glazewm.exe")) {
         $missing += 'GlazeWM               winget install glzr-io.glazewm'
     }
     # Only needed to build the fullscreen-game helper. Everything else works
@@ -131,8 +138,9 @@ foreach ($pair in $MAP) {
     }
 }
 
-# GlazeWM does not expand environment variables inside config.yaml, so the
-# paths have to be rewritten for real.
+# The shipped startup commands use %USERPROFILE%, which GlazeWM expands itself.
+# This rewrite is for absolute paths you put in your own PERSONAL regions,
+# carried over from another machine's user.
 $configPath = Join-Path $GLAZE_DIR 'config.yaml'
 if ((Test-Path $configPath) -and -not $Link) {
     if ($PSCmdlet.ShouldProcess($configPath, "rewrite paths to $env:USERPROFILE")) {
