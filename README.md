@@ -10,7 +10,7 @@ tripping me up after moving over from Hyprland, none of which GlazeWM ships:
 |---|---|
 | **BSP layout** | GlazeWM always splits the same way. A small daemon sets the split axis from the shape of the focused window, so the screen partitions like komorebi or bspwm. [How it works](docs/TILING.md) |
 | **Mouse gestures on tiled windows** | `Win`+drag to move, `Win`+right-drag to resize, tiled windows included. AltSnap only ever managed floating ones. [How it works](docs/MOUSE.md) |
-| **Touchpad workspace swipe** | Slide three fingers sideways and the workspace changes, the way GNOME and Hyprland do. Read straight from the Precision Touchpad. [How it works](docs/MOUSE.md#touchpad-swipe) |
+| **Touchpad workspace swipe** | Slide three fingers sideways and the workspace changes, the way GNOME and Hyprland do; add `Alt`+`Shift` and the focused window comes along. Needs a Precision Touchpad, and Windows' own three-finger swipe turned off (one command, and `-Restore` gives it back). [How it works](docs/MOUSE.md#touchpad-swipe) |
 | **The taskbar over fullscreen games** | Switch workspace, come back, push the mouse down, and an auto-hidden taskbar slides up over your game. Fixed, after finding out that the obvious API for it does nothing. [The whole story](docs/FULLSCREEN-GAMES.md) |
 | **Follow the window you just moved** | `Alt+Shift+<n>` sends a window to a workspace *and takes you along*, the way komorebi does. |
 | **Dialogs that stay out of the layout** | A "Save as" box does not rearrange your workspace and then rearrange it back. Recognised from the Win32 window style rather than a list of names, because ownership and "cannot be resized" are not things a window rule can match on. [How it works](docs/POPUPS.md) |
@@ -160,6 +160,7 @@ The short version:
 | `Alt+Shift+1…0` | send the window there and follow it |
 | `Alt+R` | resize mode |
 | `Win`+drag | move / resize with the mouse |
+| 3-finger swipe | previous / next workspace; with `Alt`+`Shift`, take the window along |
 
 Adding your own goes in a marked region of the config that upgrades never
 overwrite: [docs/CUSTOMIZING.md](docs/CUSTOMIZING.md).
