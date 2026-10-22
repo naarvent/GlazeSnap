@@ -5,6 +5,7 @@
 ;   Win + drag left button   -> move    (Hyprland: bindm = SUPER, mouse:272)
 ;   Win + drag right button  -> resize  (Hyprland: bindm = SUPER, mouse:273)
 ;   pointer rests on a window -> it takes focus  (Hyprland: follow_mouse)
+;   N-finger touchpad swipe   -> previous / next workspace  (Hyprland: workspace_swipe)
 ;
 ; GlazeWM owns the geometry of tiled windows, so moving one with SetWindowPos
 ; achieves nothing: the WM puts it straight back. Those have to go through the
@@ -74,6 +75,23 @@ FOCUS_SKIP_CLASSES := Map(
     "Windows.UI.Core.CoreWindow", true,   ; start menu, search
     "XamlExplorerHostIslandWindow", true  ; alt+tab, task view
 )
+
+; Touchpad swipe between workspaces — GNOME / Hyprland `workspace_swipe`. Slide
+; TOUCHPAD_FINGERS fingers sideways and the workspace changes, the same as
+; Alt+[ and Alt+]. Needs a Windows Precision Touchpad; on anything else the
+; script says so in the debug log and carries on without it.
+;
+; Windows gives those swipes its own meaning (three fingers switch apps, four
+; switch virtual desktops) and does not stop at telling us about them, so set
+; the swipe for that finger count to "Nothing" in Settings > Bluetooth &
+; devices > Touchpad, or both happen at once.
+TOUCHPAD_SWIPE := true
+TOUCHPAD_FINGERS := 3
+TOUCHPAD_STEP := 0.15  ; slide this fraction of the pad's width for one workspace
+TOUCHPAD_INVERT := false ; false: fingers left -> next workspace, as on Linux
+TOUCHPAD_SKIP_EMPTY := false ; true: only workspaces that have windows, like Alt+[ / Alt+]
+TOUCHPAD_SETTLE_MS := 70 ; fingers landing wobble; the swipe starts after they settle
+TOUCHPAD_COOLDOWN_MS := 120 ; minimum time between two steps
 
 ; NOTE: AutoHotkey v2 identifiers are case-insensitive, so a variable named
 ; DEBUG would collide with a function named Debug(). Hence the longer name.
@@ -345,6 +363,248 @@ BlockedByModal(candidate) {
         window := owner
     }
     return false
+}
+
+; ----------------------------------------------------------- touchpad swipe
+;
+; Windows does not hand multi-finger gestures to applications, but a Precision
+; Touchpad is a HID device, and Raw Input will deliver its reports to anyone who
+; registers for it — including while another window has focus (RIDEV_INPUTSINK).
+; What arrives is the raw contact data, so the swipe is worked out here.
+;
+; A touchpad frame is a contact count plus, per finger, an id and a position.
+; The count comes first and the fingers may be spread over several reports
+; ("hybrid" mode), so a frame is only complete once that many fingers have been
+; read. The positions are taken in fractions of the pad, which makes the step
+; the same on any size of touchpad.
+
+padGui := ""
+padDevices := Map()    ; device handle -> its layout, or 0 if it is not usable
+padRemaining := 0      ; fingers of the current frame not read yet
+padTotal := 0          ; fingers the current frame announced
+padContacts := Map()   ; finger id -> {x, y} for the current frame
+padAnchorX := ""       ; where the fingers were when the swipe started or last stepped
+padAnchorY := ""
+padLanded := 0         ; when the right number of fingers arrived
+padLastStep := 0       ; when the last workspace change was sent
+padLastDirection := 0  ; +1 next, -1 previous
+
+if (TOUCHPAD_SWIPE)
+    InitTouchpad()
+
+InitTouchpad() {
+    global padGui
+    ; Raw Input needs a window to deliver to. It is never shown.
+    padGui := Gui()
+
+    ; RAWINPUTDEVICE: usage page, usage, flags, target window.
+    size := 8 + A_PtrSize
+    device := Buffer(size, 0)
+    NumPut("ushort", 0x0D, "ushort", 0x05, "uint", 0x100, "ptr", padGui.Hwnd, device)  ; digitizer / touch pad, INPUTSINK
+    if (!DllCall("RegisterRawInputDevices", "ptr", device, "uint", 1, "uint", size, "int")) {
+        Debug("touchpad: RegisterRawInputDevices failed, swipe disabled")
+        return
+    }
+    OnMessage(0x00FF, OnRawInput)   ; WM_INPUT
+    Debug("touchpad: listening for " . TOUCHPAD_FINGERS . "-finger swipes")
+}
+
+OnRawInput(wParam, lParam, msg, hwnd) {
+    static headerSize := 8 + 2 * A_PtrSize   ; RAWINPUTHEADER
+
+    size := 0
+    DllCall("GetRawInputData", "ptr", lParam, "uint", 0x10000003, "ptr", 0, "uint*", &size, "uint", headerSize, "uint")
+    if (!size)
+        return
+    raw := Buffer(size)
+    if (DllCall("GetRawInputData", "ptr", lParam, "uint", 0x10000003, "ptr", raw, "uint*", &size, "uint", headerSize, "uint") != size)
+        return
+    if (NumGet(raw, 0, "uint") != 2)   ; RIM_TYPEHID
+        return
+
+    layout := PadLayout(NumGet(raw, 8, "ptr"))
+    if (!layout)
+        return
+
+    ; RAWHID: the size of one report, how many there are, then the reports.
+    reportSize := NumGet(raw, headerSize, "uint")
+    reportCount := NumGet(raw, headerSize + 4, "uint")
+    loop reportCount
+        PadReport(layout, raw.Ptr + headerSize + 8 + (A_Index - 1) * reportSize, reportSize)
+}
+
+; What the touchpad can report, worked out once per device from its HID
+; descriptor: where the contact count lives, and for each finger slot which link
+; collection holds its id and position.
+PadLayout(device) {
+    global padDevices
+    if (padDevices.Has(device))
+        return padDevices[device]
+    padDevices[device] := 0
+
+    size := 0
+    DllCall("GetRawInputDeviceInfoW", "ptr", device, "uint", 0x20000005, "ptr", 0, "uint*", &size)  ; RIDI_PREPARSEDDATA
+    if (!size)
+        return 0
+    preparsed := Buffer(size)
+    if (DllCall("GetRawInputDeviceInfoW", "ptr", device, "uint", 0x20000005, "ptr", preparsed, "uint*", &size, "uint") = 0xFFFFFFFF)
+        return 0
+
+    caps := Buffer(64, 0)   ; HIDP_CAPS
+    if (DllCall("hid\HidP_GetCaps", "ptr", preparsed, "ptr", caps, "int") != 0x110000)
+        return 0
+    count := NumGet(caps, 48, "ushort")   ; NumberInputValueCaps
+    if (!count)
+        return 0
+    valueCaps := Buffer(72 * count, 0)    ; HIDP_VALUE_CAPS
+    if (DllCall("hid\HidP_GetValueCaps", "int", 0, "ptr", valueCaps, "ushort*", &count, "ptr", preparsed, "int") != 0x110000)
+        return 0
+
+    layout := { preparsed: preparsed, countLink: -1, slots: Map(), xMin: 0, xRange: 0, yMin: 0, yRange: 0 }
+    loop count {
+        base := (A_Index - 1) * 72
+        if (NumGet(valueCaps, base + 12, "uchar"))   ; IsRange: not how touchpads describe a finger
+            continue
+        page := NumGet(valueCaps, base, "ushort")
+        link := NumGet(valueCaps, base + 6, "ushort")
+        usage := NumGet(valueCaps, base + 56, "ushort")
+        low := NumGet(valueCaps, base + 40, "int")
+        high := NumGet(valueCaps, base + 44, "int")
+
+        if (page = 0x0D && usage = 0x54) {         ; contact count
+            layout.countLink := link
+        } else if (page = 0x0D && usage = 0x51) {  ; contact id
+            PadSlot(layout, link).id := true
+        } else if (page = 0x01 && usage = 0x30) {  ; X
+            PadSlot(layout, link).x := true
+            layout.xMin := low, layout.xRange := high - low
+        } else if (page = 0x01 && usage = 0x31) {  ; Y
+            PadSlot(layout, link).y := true
+            layout.yMin := low, layout.yRange := high - low
+        }
+    }
+
+    ; Fingers are read in link collection order, which is the order they fill.
+    links := []
+    for link, slot in layout.slots {
+        if (slot.id && slot.x && slot.y)
+            links.Push(link)
+    }
+    if (layout.countLink < 0 || !links.Length || layout.xRange <= 0 || layout.yRange <= 0)
+        return 0
+    loop links.Length - 1 {
+        loop links.Length - A_Index {
+            if (links[A_Index] > links[A_Index + 1]) {
+                swap := links[A_Index], links[A_Index] := links[A_Index + 1], links[A_Index + 1] := swap
+            }
+        }
+    }
+    layout.links := links
+    padDevices[device] := layout
+    Debug("touchpad: " . links.Length . " contacts per report, x range " . layout.xRange . ", y range " . layout.yRange)
+    return layout
+}
+
+PadSlot(layout, link) {
+    if (!layout.slots.Has(link))
+        layout.slots[link] := { id: false, x: false, y: false }
+    return layout.slots[link]
+}
+
+PadValue(layout, page, link, usage, report, length, &value) {
+    value := 0
+    return DllCall("hid\HidP_GetUsageValue", "int", 0, "ushort", page, "ushort", link, "ushort", usage
+        , "uint*", &value, "ptr", layout.preparsed, "ptr", report, "uint", length, "int") = 0x110000
+}
+
+PadReport(layout, report, length) {
+    global padRemaining, padTotal, padContacts
+
+    ; A report of some other kind (a button, a different report id) fails here.
+    if (!PadValue(layout, 0x0D, layout.countLink, 0x54, report, length, &fingers))
+        return
+
+    if (fingers > 0) {
+        padTotal := padRemaining := fingers
+        padContacts := Map()
+    } else if (padRemaining = 0) {
+        PadFrame(0)     ; nothing on the pad
+        return
+    }
+
+    for link in layout.links {
+        if (padRemaining <= 0)
+            break
+        if (!PadValue(layout, 0x0D, link, 0x51, report, length, &id)
+            || !PadValue(layout, 0x01, link, 0x30, report, length, &x)
+            || !PadValue(layout, 0x01, link, 0x31, report, length, &y))
+            continue
+        padContacts[id] := { x: (x - layout.xMin) / layout.xRange, y: (y - layout.yMin) / layout.yRange }
+        padRemaining--
+    }
+
+    if (padRemaining <= 0)
+        PadFrame(padTotal)
+}
+
+; One complete frame. The swipe is tracked from the point the right number of
+; fingers were down; every time the centre of them has travelled TOUCHPAD_STEP
+; sideways it is one workspace, and the point travelled from starts over, so
+; carrying on sliding keeps going — the way it does on Linux.
+PadFrame(fingers) {
+    global TOUCHPAD_FINGERS, TOUCHPAD_STEP, TOUCHPAD_INVERT, TOUCHPAD_SKIP_EMPTY
+    global TOUCHPAD_SETTLE_MS, TOUCHPAD_COOLDOWN_MS
+    global padContacts, padAnchorX, padAnchorY, padLanded, padLastStep, padLastDirection
+
+    ; Any other number of fingers is some other gesture, or a finger lifting
+    ; early. The swipe starts again from wherever the right number come back.
+    if (fingers != TOUCHPAD_FINGERS) {
+        padAnchorX := ""
+        padLanded := 0
+        padLastDirection := 0
+        return
+    }
+
+    sumX := 0, sumY := 0
+    for id, contact in padContacts
+        sumX += contact.x, sumY += contact.y
+    centreX := sumX / fingers, centreY := sumY / fingers
+
+    ; Fingers do not land cleanly: the first few frames drift and read as a
+    ; swipe in a random direction. The swipe is measured from where they settle.
+    if (!padLanded)
+        padLanded := A_TickCount
+    if (A_TickCount - padLanded < TOUCHPAD_SETTLE_MS) {
+        padAnchorX := centreX, padAnchorY := centreY
+        return
+    }
+
+    dx := centreX - padAnchorX, dy := centreY - padAnchorY
+
+    ; Mostly vertical is Windows' own territory (task view, show desktop). Not
+    ; ours, and not worth keeping the old starting point for either.
+    if (Abs(dy) > Abs(dx)) {
+        if (Abs(dy) >= TOUCHPAD_STEP)
+            padAnchorX := centreX, padAnchorY := centreY
+        return
+    }
+    next := (dx < 0) != TOUCHPAD_INVERT
+    direction := next ? 1 : -1
+
+    ; Turning back mid-swipe takes twice the travel: a hand that slows down at
+    ; the end of a slide wobbles backwards, and that is not a request to return.
+    needed := (padLastDirection = -direction) ? TOUCHPAD_STEP * 2 : TOUCHPAD_STEP
+    if (Abs(dx) < needed || A_TickCount - padLastStep < TOUCHPAD_COOLDOWN_MS)
+        return
+
+    padAnchorX := centreX, padAnchorY := centreY
+    padLastStep := A_TickCount
+    padLastDirection := direction
+    command := "focus --" . (next ? "next" : "prev") . (TOUCHPAD_SKIP_EMPTY ? "-active" : "") . "-workspace"
+    Debug("touchpad swipe -> " . command)
+    ; Sent from a timer: the bridge call can wait, and this is a message handler
+    ; that has the next report queued behind it.
+    SetTimer(() => SendCommand(command), -1)
 }
 
 ; --------------------------------------------------------------------- move

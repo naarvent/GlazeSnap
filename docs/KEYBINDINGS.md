@@ -63,7 +63,8 @@ and leaves you behind. komorebi takes you with it, which is what this copies.
 Drop the second command if you prefer the stock behaviour.
 
 `Alt+[` and `Alt+]` stand in for Hyprland's `mouse_down` / `mouse_up` workspace
-cycling. GlazeWM cannot bind the scroll wheel.
+cycling. GlazeWM cannot bind the scroll wheel. A three-finger touchpad swipe
+does the same: [Touchpad swipe](MOUSE.md#touchpad-swipe).
 
 ## Launching
 

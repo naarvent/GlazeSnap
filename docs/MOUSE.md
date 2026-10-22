@@ -12,7 +12,8 @@ bindm = SUPER, mouse:273, resizewindow    ->  Win + right drag
 Both work on **tiled** windows, which is the part AltSnap cannot do.
 
 `glaze-mouse.ahk` also owns [hover focus](#hover-focus), Hyprland's
-`follow_mouse`.
+`follow_mouse`, and the [touchpad swipe](#touchpad-swipe), Hyprland's
+`workspace_swipe`.
 
 ## Why AltSnap alone is not enough
 
@@ -171,6 +172,46 @@ whether or not windows can be focused by id.
 
 Raise the dwell if focus still arrives somewhere you were only passing through;
 lower it if it feels sticky. Below the poll interval it has no further effect.
+
+## Touchpad swipe
+
+Slide three fingers sideways on the touchpad and the workspace changes. Every
+workspace is visited, empty ones included, so you can see the blank ones; set
+`TOUCHPAD_SKIP_EMPTY` to get `Alt+[` / `Alt+]` behaviour instead. Fingers moving
+left go to the next one, as on Linux.
+
+Windows does not hand multi-finger gestures to applications, but a Precision
+Touchpad is a HID device and Raw Input delivers its reports to anyone who
+registers for them, focused or not. `glaze-mouse.ahk` registers, reads the
+contacts, and works the swipe out itself:
+
+- a frame is a finger count plus an id and a position per finger, possibly
+  spread over several reports, so it is only used once every finger has arrived
+- positions are fractions of the pad, so the step is the same on any touchpad
+- the centre of the fingers has to travel `TOUCHPAD_STEP` sideways for one
+  workspace, and then starts over from there, so carrying on sliding keeps going
+- mostly vertical movement is ignored: that is Windows' task view
+- the first moments after the fingers land are ignored, and turning back
+  mid-swipe takes twice the travel: landing and slowing down both wobble
+
+**One thing to do by hand.** Windows still sees the swipe too, and gives it its
+own meaning (three fingers switch apps, four switch virtual desktops). Set the
+swipe for your finger count to *Nothing* in Settings > Bluetooth & devices >
+Touchpad, or both happen at once.
+
+It needs a Precision Touchpad. On an older Synaptics or ELAN driver the device
+is not reported this way and nothing happens; `DEBUG_ENABLED` shows whether the
+touchpad was recognised.
+
+| Constant | Default | What it does |
+|---|---|---|
+| `TOUCHPAD_SWIPE` | `true` | turn the whole thing off |
+| `TOUCHPAD_FINGERS` | 3 | how many fingers make the swipe |
+| `TOUCHPAD_STEP` | 0.15 | fraction of the pad's width for one workspace |
+| `TOUCHPAD_INVERT` | `false` | swap the direction |
+| `TOUCHPAD_SKIP_EMPTY` | `false` | only visit workspaces that have windows |
+| `TOUCHPAD_SETTLE_MS` | 70 | ignore the wobble of fingers landing |
+| `TOUCHPAD_COOLDOWN_MS` | 120 | minimum time between two steps |
 
 ## Living with AltSnap
 
