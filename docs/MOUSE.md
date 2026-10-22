@@ -198,10 +198,41 @@ Hold `Alt`+`Shift` while swiping and the focused window comes with you — the
 same pair of commands as `Alt+Shift+<n>` (`move`, then `focus`), one step at a
 time. Without them it only changes workspace.
 
-**One thing to do by hand.** Windows still sees the swipe too, and gives it its
-own meaning (three fingers switch apps, four switch virtual desktops). Set the
-swipe for your finger count to *Nothing* in Settings > Bluetooth & devices >
-Touchpad, or both happen at once.
+**One thing to do.** Windows still sees the swipe too, and gives it its own
+meaning (three fingers switch apps, four switch virtual desktops). Turn that off
+or both happen at once. Either set the swipe for your finger count to *Nothing*
+in Settings > Bluetooth & devices > Touchpad, or run:
+
+```powershell
+.\scripts\touchpad-native-gesture.ps1            # three fingers; -Fingers 4 for four
+```
+
+The script is in the repo's `scripts` folder; the MSI does not install it. Without
+it, the same thing by hand:
+
+```powershell
+$key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\PrecisionTouchPad'
+New-ItemProperty $key -Name ThreeFingerSlideEnabled -Value 0 -PropertyType DWord -Force
+```
+
+It writes `ThreeFingerSlideEnabled = 0` (or `FourFingerSlideEnabled`) under
+`HKCU\Software\Microsoft\Windows\CurrentVersion\PrecisionTouchPad`, per user
+and without elevation. Some drivers only pick it up after signing out.
+
+**Getting Windows' swipe back.** If you change your mind, or remove the swipe
+from `glaze-mouse.ahk`:
+
+```powershell
+.\scripts\touchpad-native-gesture.ps1 -Restore   # deletes the value it set
+```
+
+By hand, the same: `Remove-ItemProperty $key -Name ThreeFingerSlideEnabled`.
+
+That returns the swipe to the Windows default. The same thing from Settings:
+set the swipe back to *Switch apps and show desktop* (three fingers) or *Switch
+desktops and show desktop* (four). Setting `TOUCHPAD_SWIPE := false` stops this
+script reading the touchpad but does **not** touch the Windows setting, so a
+swipe you turned off stays off until you restore it.
 
 It needs a Precision Touchpad. On an older Synaptics or ELAN driver the device
 is not reported this way and nothing happens; `DEBUG_ENABLED` shows whether the

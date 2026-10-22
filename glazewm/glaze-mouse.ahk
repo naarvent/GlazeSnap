@@ -86,7 +86,8 @@ FOCUS_SKIP_CLASSES := Map(
 ; Windows gives those swipes its own meaning (three fingers switch apps, four
 ; switch virtual desktops) and does not stop at telling us about them, so set
 ; the swipe for that finger count to "Nothing" in Settings > Bluetooth &
-; devices > Touchpad, or both happen at once.
+; devices > Touchpad, or both happen at once. scripts/touchpad-native-gesture.ps1
+; does it for you, and -Restore gives Windows its swipe back.
 TOUCHPAD_SWIPE := true
 TOUCHPAD_FINGERS := 3
 TOUCHPAD_STEP := 0.15  ; slide this fraction of the pad's width for one workspace
