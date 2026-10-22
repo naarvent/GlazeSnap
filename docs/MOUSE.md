@@ -194,6 +194,10 @@ contacts, and works the swipe out itself:
 - the first moments after the fingers land are ignored, and turning back
   mid-swipe takes twice the travel: landing and slowing down both wobble
 
+Hold `Alt`+`Shift` while swiping and the focused window comes with you — the
+same pair of commands as `Alt+Shift+<n>` (`move`, then `focus`), one step at a
+time. Without them it only changes workspace.
+
 **One thing to do by hand.** Windows still sees the swipe too, and gives it its
 own meaning (three fingers switch apps, four switch virtual desktops). Set the
 swipe for your finger count to *Nothing* in Settings > Bluetooth & devices >

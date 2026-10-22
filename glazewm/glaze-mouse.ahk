@@ -6,6 +6,7 @@
 ;   Win + drag right button  -> resize  (Hyprland: bindm = SUPER, mouse:273)
 ;   pointer rests on a window -> it takes focus  (Hyprland: follow_mouse)
 ;   N-finger touchpad swipe   -> previous / next workspace  (Hyprland: workspace_swipe)
+;   Alt+Shift + that swipe     -> the same, carrying the focused window along
 ;
 ; GlazeWM owns the geometry of tiled windows, so moving one with SetWindowPos
 ; achieves nothing: the WM puts it straight back. Those have to go through the
@@ -78,7 +79,8 @@ FOCUS_SKIP_CLASSES := Map(
 
 ; Touchpad swipe between workspaces — GNOME / Hyprland `workspace_swipe`. Slide
 ; TOUCHPAD_FINGERS fingers sideways and the workspace changes, the same as
-; Alt+[ and Alt+]. Needs a Windows Precision Touchpad; on anything else the
+; Alt+[ and Alt+]. Hold Alt+Shift while swiping and the focused window goes with
+; you, like Alt+Shift+<n>. Needs a Windows Precision Touchpad; on anything else the
 ; script says so in the debug log and carries on without it.
 ;
 ; Windows gives those swipes its own meaning (three fingers switch apps, four
@@ -388,6 +390,7 @@ padAnchorY := ""
 padLanded := 0         ; when the right number of fingers arrived
 padLastStep := 0       ; when the last workspace change was sent
 padLastDirection := 0  ; +1 next, -1 previous
+padCarryId := ""       ; the window an Alt+Shift swipe is carrying
 
 if (TOUCHPAD_SWIPE)
     InitTouchpad()
@@ -554,7 +557,7 @@ PadReport(layout, report, length) {
 PadFrame(fingers) {
     global TOUCHPAD_FINGERS, TOUCHPAD_STEP, TOUCHPAD_INVERT, TOUCHPAD_SKIP_EMPTY
     global TOUCHPAD_SETTLE_MS, TOUCHPAD_COOLDOWN_MS
-    global padContacts, padAnchorX, padAnchorY, padLanded, padLastStep, padLastDirection
+    global padContacts, padAnchorX, padAnchorY, padLanded, padLastStep, padLastDirection, padCarryId
 
     ; Any other number of fingers is some other gesture, or a finger lifting
     ; early. The swipe starts again from wherever the right number come back.
@@ -562,6 +565,7 @@ PadFrame(fingers) {
         padAnchorX := ""
         padLanded := 0
         padLastDirection := 0
+        padCarryId := ""
         return
     }
 
@@ -600,11 +604,40 @@ PadFrame(fingers) {
     padAnchorX := centreX, padAnchorY := centreY
     padLastStep := A_TickCount
     padLastDirection := direction
-    command := "focus --" . (next ? "next" : "prev") . (TOUCHPAD_SKIP_EMPTY ? "-active" : "") . "-workspace"
-    Debug("touchpad swipe -> " . command)
+    target := (next ? "next" : "prev") . (TOUCHPAD_SKIP_EMPTY ? "-active" : "") . "-workspace"
+
+    ; Alt+Shift held: carry the focused window along and follow it, the same
+    ; pair of commands as Alt+Shift+<n>. The focus is relative to the workspace
+    ; we are still on, so it lands next to the one the window went to.
+    carry := GetKeyState("Alt", "P") && GetKeyState("Shift", "P")
+    Debug("touchpad swipe -> " . (carry ? "move + " : "") . "focus --" . target)
     ; Sent from a timer: the bridge call can wait, and this is a message handler
     ; that has the next report queued behind it.
-    SetTimer(() => SendCommand(command), -1)
+    SetTimer(() => PadStep(carry, target), -1)
+}
+
+; `move` leaves the focus where it was, and in the workspace the window lands on
+; that is the window that was already there. So a second step of the same swipe
+; would carry that one instead. The window is picked once, when the swipe starts
+; carrying, and addressed by id from then on; after each step it is given the
+; focus again so the next one starts from it too.
+PadStep(carry, target) {
+    global padCarryId
+    ; The next touchpad report arrives while this waits on the bridge, and a
+    ; step cut off between the move and the refocus leaves the window on one
+    ; workspace and you on another.
+    Critical
+    if (carry && padCarryId = "") {
+        state := Query("/state?x=0&y=0&hwnd=" . WinExist("A"))
+        if (Field(state, "found") = "true")
+            padCarryId := Field(state, "id")
+        Debug("  carrying window " . (padCarryId = "" ? "<none found>" : padCarryId))
+    }
+    if (carry && padCarryId != "")
+        Debug("  move --" . target . " -> " . Query("/cmd?c=" . UriEncode("--id " . padCarryId . " move --" . target)))
+    Debug("  focus --" . target . " -> " . Query("/cmd?c=" . UriEncode("focus --" . target)))
+    if (carry && padCarryId != "")
+        Debug("  refocus -> " . Query("/cmd?c=" . UriEncode("focus --container-id " . padCarryId)))
 }
 
 ; --------------------------------------------------------------------- move
